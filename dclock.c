@@ -17,18 +17,20 @@
 
 /* default options */
 unsigned int width=31, height=22;
-int X=200, Y=200;
+int X=-31, Y=-22;
 char *bg = "black", *fg = "white";
+int daemonize = 0;
 
 /* command-line options */
 static struct option long_opts[] = {
 	{"help",      no_argument, 0, 'h'},
+	{"daemon",    no_argument, 0, 'd'},
 	{"geometry",  required_argument, 0, 'g'},
 	{"bg",        required_argument, 0, 'b'},
 	{"fg",        required_argument, 0, 'f'},
 	{0, 0, 0, 0}
 };
-const char *optstring = "hg:b:f:";
+const char *optstring = "hdg:b:f:";
 
 
 void usage(void)
@@ -181,6 +183,7 @@ int main(int argc, char *argv[])
 	while ((c = getopt_long_only(argc, argv, optstring, long_opts, &index)) != -1) {
 		switch (c) {
 		case 'h':
+		case '?':
 			usage();
 			exit(0);
 			break;
@@ -197,9 +200,8 @@ int main(int argc, char *argv[])
 			fg = strdup(optarg);
 			break;
 
-		case '?':
-			usage();
-			exit(0);
+		case 'd':
+			daemonize = 1;
 			break;
 		}
 	}
@@ -229,10 +231,18 @@ int main(int argc, char *argv[])
   			    CWOverrideRedirect, &swa);
 
 	XStoreName(dpy, win, "dclock");
-
 	XMapWindow(dpy, win);
 
 	gc = XCreateGC(dpy, win, 0, &gc_setup);
+
+	if (daemonize) {
+		if (fork() != 0)
+			exit(0);
+		close(0);
+		close(1);
+		close(2);
+		setsid();
+	}
 
 	while (1) {
 		if (XPending(dpy)) {

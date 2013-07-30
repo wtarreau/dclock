@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -Os -s
 
 LIBS = -lX11 -L/usr/X11R6/lib
 
