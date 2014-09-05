@@ -130,6 +130,7 @@ void draw(Display *display, Window win)
 {
 	struct tm *tm;
 	time_t curr;
+	int x, i;
 
 	curr = time(NULL);
 	tm = localtime(&curr);
@@ -147,11 +148,23 @@ void draw(Display *display, Window win)
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
 	draw_digit(dpy, win, gc, 25,  1, (tm->tm_min % 10) + '0');
 
-	draw_digit(dpy, win, gc,  1, 12, (tm->tm_mday / 10) + '0');
-	draw_digit(dpy, win, gc,  8, 12, (tm->tm_mday % 10) + '0');
-	draw_digit(dpy, win, gc, 14, 12, '/');
-	draw_digit(dpy, win, gc, 18, 12, ((tm->tm_mon + 1) / 10) + '0');
-	draw_digit(dpy, win, gc, 25, 12, ((tm->tm_mon + 1) % 10) + '0');
+	draw_digit(dpy, win, gc,  1, 13, (tm->tm_mday / 10) + '0');
+	draw_digit(dpy, win, gc,  8, 13, (tm->tm_mday % 10) + '0');
+	draw_digit(dpy, win, gc, 14, 13, '/');
+	draw_digit(dpy, win, gc, 18, 13, ((tm->tm_mon + 1) / 10) + '0');
+	draw_digit(dpy, win, gc, 25, 13, ((tm->tm_mon + 1) % 10) + '0');
+
+	/* draw a 4-pixel horizontal line between the time and date to
+	 * represent the day of week. First bar on the left is monday,
+	 * last one on the right is sunday. We also draw the first pixel
+	 * of every day to make them easier to count.
+	 */
+	x = 1 + ((tm->tm_wday + 6) % 7) * 4;
+	for (i = 0; i < 4; i++)
+		XDrawPoint(display, win, gc, x + i, 11);
+	
+	for (i = 0; i < 8; i++)
+		XDrawPoint(display, win, gc, 1 + i * 4, 11);
 }
 
 int errhandler(Display *dpy, XErrorEvent *ev)
