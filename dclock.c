@@ -18,7 +18,7 @@
 /* default options */
 unsigned int width=31, height=22;
 int X=-31, Y=-22;
-char *bg = "black", *fg = "white";
+char *bg = "black", *fg = "white", *dc = "white";
 int daemonize = 0;
 
 /* command-line options */
@@ -28,6 +28,7 @@ static struct option long_opts[] = {
 	{"geometry",  required_argument, 0, 'g'},
 	{"bg",        required_argument, 0, 'b'},
 	{"fg",        required_argument, 0, 'f'},
+	{"dc",        required_argument, 0, 'c'},
 	{0, 0, 0, 0}
 };
 const char *optstring = "hdg:b:f:";
@@ -40,7 +41,8 @@ void usage(void)
 		"\t-[d]aemon                 daemonize\n"
 		"\t-[g]eometry WxH[+X+Y]     set window geometry\n"
 		"\t-[b]g <color name>        background color\n"
-		"\t-[f]g <color name>        foreground 1 color\n"
+		"\t-[f]g <color name>        foreground 1 color (digits)\n"
+		"\t-d[c] <color name>        foreground 2 color (dots)\n"
 		);
 }
 
@@ -49,7 +51,7 @@ void usage(void)
 Display *dpy = NULL;
 Window win;
 GC gc;
-XColor background, foreground;
+XColor background, foreground, dotcolor;
 
 /* draw a digit 'd' with top left corner at (x0,y0). <d> may be one
  * ascii char '0'..'9', ':', '/'. Digits are 9 pixels high and 5 wide. 2 pixels
@@ -143,8 +145,11 @@ void draw(Display *display, Window win)
 	XSetForeground(dpy, gc, foreground.pixel);
 	draw_digit(dpy, win, gc,  1,  1, (tm->tm_hour / 10) + '0');
 	draw_digit(dpy, win, gc,  8,  1, (tm->tm_hour % 10) + '0');
-	if (tm->tm_sec & 1)
+	if (tm->tm_sec & 1) {
+		XSetForeground(dpy, gc, dotcolor.pixel);
 		draw_digit(dpy, win, gc, 15,  1, ':');
+		XSetForeground(dpy, gc, foreground.pixel);
+	}
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
 	draw_digit(dpy, win, gc, 25,  1, (tm->tm_min % 10) + '0');
 
@@ -163,6 +168,7 @@ void draw(Display *display, Window win)
 	for (i = 0; i < 4; i++)
 		XDrawPoint(display, win, gc, x + i, 11);
 	
+	XSetForeground(dpy, gc, dotcolor.pixel);
 	for (i = 0; i < 8; i++)
 		XDrawPoint(display, win, gc, 1 + i * 4, 11);
 }
@@ -215,6 +221,10 @@ int main(int argc, char *argv[])
 			fg = strdup(optarg);
 			break;
 
+		case 'c':
+			dc = strdup(optarg);
+			break;
+
 		case 'd':
 			daemonize = 1;
 			break;
@@ -231,6 +241,7 @@ int main(int argc, char *argv[])
 
 	alloc_color(bg, &background);
 	alloc_color(fg, &foreground);
+	alloc_color(dc, &dotcolor);
 
 	if (X < 0)
 		X += DisplayWidth(dpy, DefaultScreen(dpy));
