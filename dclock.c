@@ -36,9 +36,11 @@ const char *optstring = "hdg:b:f:";
 void usage(void)
 {
 	fprintf(stderr, "Usage: dclock [options]\n"
-		"\t-geometry WxH[+X+Y]     set window geometry\n"
-		"\t-bg <color name>        background color\n"
-		"\t-fg <color name>        foreground 1 color (tick)\n"
+		"\t-[h]elp                   display this help\n"
+		"\t-[d]aemon                 daemonize\n"
+		"\t-[g]eometry WxH[+X+Y]     set window geometry\n"
+		"\t-[b]g <color name>        background color\n"
+		"\t-[f]g <color name>        foreground 1 color\n"
 		);
 }
 
