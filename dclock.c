@@ -10,6 +10,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/param.h>
 #include <sys/time.h>
 #include <getopt.h>
 
@@ -19,6 +20,7 @@
 unsigned int width=31, height=22;
 int X=-31, Y=-22;
 char *bg = "black", *fg = "white", *dc = "white";
+char *bp = NULL, *bc = "red";
 int daemonize = 0;
 
 /* command-line options */
@@ -29,6 +31,8 @@ static struct option long_opts[] = {
 	{"bg",        required_argument, 0, 'b'},
 	{"fg",        required_argument, 0, 'f'},
 	{"dc",        required_argument, 0, 'c'},
+	{"bp",        required_argument, 0, 256},
+	{"bc",        required_argument, 0, 257},
 	{0, 0, 0, 0}
 };
 const char *optstring = "hdg:b:f:";
@@ -43,6 +47,8 @@ void usage(void)
 		"\t-[b]g <color name>        background color\n"
 		"\t-[f]g <color name>        foreground 1 color (digits)\n"
 		"\t-d[c] <color name>        foreground 2 color (dots)\n"
+		"\t-bp <battery path>        /sys entry to battery to monitor\n"
+		"\t-b[c] <color name>        battery low color\n"
 		);
 }
 
@@ -51,7 +57,8 @@ void usage(void)
 Display *dpy = NULL;
 Window win;
 GC gc;
-XColor background, foreground, dotcolor;
+XColor background, foreground, dotcolor, batcolor;
+int batflash = 0;
 
 /* draw a digit 'd' with top left corner at (x0,y0). <d> may be one
  * ascii char '0'..'9', ':', '/'. Digits are 9 pixels high and 5 wide. 2 pixels
@@ -142,13 +149,13 @@ void draw(Display *display, Window win)
 	XFillRectangle(dpy, win, gc, 0, 0, width, height);
 
 	/* and draw the digits */
-	XSetForeground(dpy, gc, foreground.pixel);
+	XSetForeground(dpy, gc, batflash ? batcolor.pixel : foreground.pixel);
 	draw_digit(dpy, win, gc,  1,  1, (tm->tm_hour / 10) + '0');
 	draw_digit(dpy, win, gc,  8,  1, (tm->tm_hour % 10) + '0');
 	if (tm->tm_sec & 1) {
 		XSetForeground(dpy, gc, dotcolor.pixel);
 		draw_digit(dpy, win, gc, 15,  1, ':');
-		XSetForeground(dpy, gc, foreground.pixel);
+		XSetForeground(dpy, gc, batflash ? batcolor.pixel : foreground.pixel);
 	}
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
 	draw_digit(dpy, win, gc, 25,  1, (tm->tm_min % 10) + '0');
@@ -194,6 +201,43 @@ void alloc_color(char *color, XColor *ret)
 	}
 }
 
+int battery_low()
+{
+	char fp[MAXPATHLEN];
+	FILE *f;
+	int pn, en;
+
+	if (!bp)
+		return 0;
+
+	if (snprintf(fp, sizeof(fp), "%s/power_now", bp) > sizeof(fp))
+		return 0;
+
+	f = fopen(fp, "r");
+	if (!f)
+		return 0;
+
+	if (fscanf(f, "%d", &pn) != 1)
+		return 0;
+
+	fclose(f);
+
+	if (snprintf(fp, sizeof(fp), "%s/energy_now", bp) > sizeof(fp))
+		return 0;
+
+	f = fopen(fp, "r");
+	if (!f)
+		return 0;
+
+	if (fscanf(f, "%d", &en) != 1)
+		return 0;
+
+	fclose(f);
+
+	/* return power low when less than 10 minutes of energy are remaining */
+	return en < (pn * 10 / 60);
+}
+
 int main(int argc, char *argv[])
 {
 	Window root;
@@ -228,6 +272,14 @@ int main(int argc, char *argv[])
 		case 'd':
 			daemonize = 1;
 			break;
+
+		case 256: /* -bp */
+			bp = strdup(optarg);
+			break;
+
+		case 257: /* -bc */
+			bc = strdup(optarg);
+			break;
 		}
 	}
 
@@ -242,6 +294,7 @@ int main(int argc, char *argv[])
 	alloc_color(bg, &background);
 	alloc_color(fg, &foreground);
 	alloc_color(dc, &dotcolor);
+	alloc_color(bc, &batcolor);
 
 	if (X < 0)
 		X += DisplayWidth(dpy, DefaultScreen(dpy));
@@ -279,6 +332,14 @@ int main(int argc, char *argv[])
 		}
 		draw(dpy, win);
 		XFlush(dpy);
-		sleep(1);
+
+		if (batflash || battery_low()) {
+			batflash = !batflash;
+			usleep(500000);
+		}
+		else {
+			batflash = 0;
+			usleep(1000000);
+		}
 	}
 }
