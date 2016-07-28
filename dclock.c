@@ -206,7 +206,10 @@ void alloc_color(char *color, XColor *ret)
 	}
 }
 
-int battery_low()
+/* returns 0 for unkonwn / good, 1 for low (less than 10 minutes),
+ * 2 for very low (less than 3 minutes)
+ */
+int battery_status()
 {
 	char fp[MAXPATHLEN];
 	FILE *f;
@@ -240,7 +243,12 @@ int battery_low()
 	fclose(f);
 
 	/* return power low when less than 10 minutes of energy are remaining */
-	return en < (pn * 10 / 60);
+	if (en >= (pn * 10 / 60))
+		return 0;
+	else if (en >= (pn * 3 / 60))
+		return 1;
+	else
+		return 2;
 }
 
 int main(int argc, char *argv[])
@@ -341,13 +349,19 @@ int main(int argc, char *argv[])
 		draw(dpy, win);
 		XFlush(dpy);
 
-		if (battery_low()) {
+		switch (battery_status()) {
+		case 1: // less than 10 minutes
 			batflash = !batflash;
 			usleep(500000);
-		}
-		else {
+			break;
+		case 2: // less than 3 minutes
+			batflash = !batflash;
+			usleep(250000);
+			break;
+		default: // good or unknown
 			batflash = -1;
 			usleep(1000000);
+			break;
 		}
 	}
 }
