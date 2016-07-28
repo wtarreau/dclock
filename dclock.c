@@ -20,8 +20,9 @@
 unsigned int width=31, height=22;
 int X=-31, Y=-22;
 char *bg = "black", *fg = "white", *dc = "white";
-char *bp = NULL, *bc = "red";
+char *bp = NULL, *bc[2] = { "red", "yellow" };
 int daemonize = 0;
+int bcindex = 0;
 
 /* command-line options */
 static struct option long_opts[] = {
@@ -48,7 +49,7 @@ void usage(void)
 		"\t-[f]g <color name>        foreground 1 color (digits)\n"
 		"\t-d[c] <color name>        foreground 2 color (dots)\n"
 		"\t-bp <battery path>        /sys entry to battery to monitor\n"
-		"\t-b[c] <color name>        battery low color\n"
+		"\t-bc <color name>          battery low color (may be repeated)\n"
 		);
 }
 
@@ -57,8 +58,8 @@ void usage(void)
 Display *dpy = NULL;
 Window win;
 GC gc;
-XColor background, foreground, dotcolor, batcolor;
-int batflash = 0;
+XColor background, foreground, dotcolor, batcolor[2];
+int batflash = -1;
 
 /* draw a digit 'd' with top left corner at (x0,y0). <d> may be one
  * ascii char '0'..'9', ':', '/'. Digits are 9 pixels high and 5 wide. 2 pixels
@@ -145,17 +146,21 @@ void draw(Display *display, Window win)
 	tm = localtime(&curr);
 
 	/* clear the window */
-	XSetForeground(dpy, gc, background.pixel);
+	if (batflash < 0)
+		XSetForeground(dpy, gc, background.pixel);
+	else
+		XSetForeground(dpy, gc, batcolor[batflash].pixel);
+
 	XFillRectangle(dpy, win, gc, 0, 0, width, height);
 
 	/* and draw the digits */
-	XSetForeground(dpy, gc, batflash ? batcolor.pixel : foreground.pixel);
+	XSetForeground(dpy, gc, foreground.pixel);
 	draw_digit(dpy, win, gc,  1,  1, (tm->tm_hour / 10) + '0');
 	draw_digit(dpy, win, gc,  8,  1, (tm->tm_hour % 10) + '0');
 	if (tm->tm_sec & 1) {
 		XSetForeground(dpy, gc, dotcolor.pixel);
 		draw_digit(dpy, win, gc, 15,  1, ':');
-		XSetForeground(dpy, gc, batflash ? batcolor.pixel : foreground.pixel);
+		XSetForeground(dpy, gc, foreground.pixel);
 	}
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
 	draw_digit(dpy, win, gc, 25,  1, (tm->tm_min % 10) + '0');
@@ -278,7 +283,9 @@ int main(int argc, char *argv[])
 			break;
 
 		case 257: /* -bc */
-			bc = strdup(optarg);
+			bc[bcindex++] = strdup(optarg);
+			if (bcindex > 1)
+				bcindex = 0;
 			break;
 		}
 	}
@@ -294,7 +301,8 @@ int main(int argc, char *argv[])
 	alloc_color(bg, &background);
 	alloc_color(fg, &foreground);
 	alloc_color(dc, &dotcolor);
-	alloc_color(bc, &batcolor);
+	alloc_color(bc[0], &batcolor[0]);
+	alloc_color(bc[1], &batcolor[1]);
 
 	if (X < 0)
 		X += DisplayWidth(dpy, DefaultScreen(dpy));
@@ -333,12 +341,12 @@ int main(int argc, char *argv[])
 		draw(dpy, win);
 		XFlush(dpy);
 
-		if (batflash || battery_low()) {
+		if (battery_low()) {
 			batflash = !batflash;
 			usleep(500000);
 		}
 		else {
-			batflash = 0;
+			batflash = -1;
 			usleep(1000000);
 		}
 	}
