@@ -157,11 +157,6 @@ void draw(Display *display, Window win)
 	XSetForeground(dpy, gc, foreground.pixel);
 	draw_digit(dpy, win, gc,  1,  1, (tm->tm_hour / 10) + '0');
 	draw_digit(dpy, win, gc,  8,  1, (tm->tm_hour % 10) + '0');
-	if (tm->tm_sec & 1) {
-		XSetForeground(dpy, gc, dotcolor.pixel);
-		draw_digit(dpy, win, gc, 15,  1, ':');
-		XSetForeground(dpy, gc, foreground.pixel);
-	}
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
 	draw_digit(dpy, win, gc, 25,  1, (tm->tm_min % 10) + '0');
 
@@ -181,6 +176,12 @@ void draw(Display *display, Window win)
 		XDrawPoint(display, win, gc, x + i, 11);
 	
 	XSetForeground(dpy, gc, dotcolor.pixel);
+
+	/* draw the blinking colon between hours and seconds */
+	if (tm->tm_sec & 1)
+		draw_digit(dpy, win, gc, 15,  1, ':');
+
+	/* and the dots delimiting the days */
 	for (i = 0; i < 8; i++)
 		XDrawPoint(display, win, gc, 1 + i * 4, 11);
 }
