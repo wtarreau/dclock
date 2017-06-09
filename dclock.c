@@ -227,7 +227,7 @@ int battery_status()
 		return 0;
 
 	if (fscanf(f, "%d", &pn) != 1)
-		return 0;
+		goto ret0;
 
 	fclose(f);
 
@@ -239,7 +239,7 @@ int battery_status()
 		return 0;
 
 	if (fscanf(f, "%d", &en) != 1)
-		return 0;
+		goto ret0;
 
 	fclose(f);
 
@@ -250,6 +250,9 @@ int battery_status()
 		return 2;
 	else
 		return 3;
+ ret0:
+	fclose(f);
+	return 0;
 }
 
 int main(int argc, char *argv[])
