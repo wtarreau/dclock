@@ -19,7 +19,7 @@
 /* default options */
 unsigned int width=31, height=22;
 int X=-31, Y=-22;
-char *bg = "black", *fg = "white", *dc = "white";
+char *bg = "black", *fg = "white", *dc = "white", *uf = "yellow";
 char *bp = NULL, *bc[2] = { "red", "yellow" };
 int daemonize = 0;
 int bcindex = 0;
@@ -32,6 +32,7 @@ static struct option long_opts[] = {
 	{"bg",        required_argument, 0, 'b'},
 	{"fg",        required_argument, 0, 'f'},
 	{"dc",        required_argument, 0, 'c'},
+	{"uf",        required_argument, 0, 'u'},
 	{"bp",        required_argument, 0, 256},
 	{"bc",        required_argument, 0, 257},
 	{0, 0, 0, 0}
@@ -47,6 +48,7 @@ void usage(void)
 		"\t-[g]eometry WxH[+X+Y]     set window geometry\n"
 		"\t-[b]g <color name>        background color\n"
 		"\t-[f]g <color name>        foreground 1 color (digits)\n"
+		"\t-[u]f <color name>        unplugged foreground color (digits)\n"
 		"\t-d[c] <color name>        foreground 2 color (dots)\n"
 		"\t-bp <battery path>        /sys entry to battery to monitor\n"
 		"\t-bc <color name>          battery low color (may be repeated)\n"
@@ -58,7 +60,7 @@ void usage(void)
 Display *dpy = NULL;
 Window win;
 GC gc;
-XColor background, foreground, dotcolor, batcolor[2];
+XColor background, foreground, dotcolor, batcolor[2], ufground;
 int batflash = -1;
 
 /* draw a digit 'd' with top left corner at (x0,y0). <d> may be one
@@ -154,7 +156,11 @@ void draw(Display *display, Window win)
 	XFillRectangle(dpy, win, gc, 0, 0, width, height);
 
 	/* and draw the digits */
-	XSetForeground(dpy, gc, foreground.pixel);
+	if (batflash == -2) // not discharging
+		XSetForeground(dpy, gc, foreground.pixel);
+	else
+		XSetForeground(dpy, gc, ufground.pixel);
+
 	draw_digit(dpy, win, gc,  1,  1, (tm->tm_hour / 10) + '0');
 	draw_digit(dpy, win, gc,  8,  1, (tm->tm_hour % 10) + '0');
 	draw_digit(dpy, win, gc, 18,  1, (tm->tm_min / 10) + '0');
@@ -213,11 +219,28 @@ void alloc_color(char *color, XColor *ret)
 int battery_status()
 {
 	char fp[MAXPATHLEN];
+	char str[50];
 	FILE *f;
 	int pn, en;
 
 	if (!bp)
 		return 0;
+
+	if (snprintf(fp, sizeof(fp), "%s/status", bp) > sizeof(fp))
+		return 0;
+
+	f = fopen(fp, "r");
+	if (!f)
+		return 0;
+
+	/* only report a state if the battery is discharging or if we can't
+	 * find its status.
+	 */
+	if (fgets(str, sizeof(str), f) != NULL &&
+	    strcmp(str, "Discharging\n") != 0)
+		goto ret0;
+
+	fclose(f);
 
 	if (snprintf(fp, sizeof(fp), "%s/power_now", bp) > sizeof(fp))
 		return 0;
@@ -282,6 +305,10 @@ int main(int argc, char *argv[])
 			fg = strdup(optarg);
 			break;
 
+		case 'u':
+			uf = strdup(optarg);
+			break;
+
 		case 'c':
 			dc = strdup(optarg);
 			break;
@@ -312,6 +339,7 @@ int main(int argc, char *argv[])
 
 	alloc_color(bg, &background);
 	alloc_color(fg, &foreground);
+	alloc_color(uf, &ufground);
 	alloc_color(dc, &dotcolor);
 	alloc_color(bc[0], &batcolor[0]);
 	alloc_color(bc[1], &batcolor[1]);
@@ -354,6 +382,10 @@ int main(int argc, char *argv[])
 		XFlush(dpy);
 
 		switch (battery_status()) {
+		case 1: // discharging, good
+			batflash = -1;
+			usleep(1000000);
+			break;
 		case 2: // less than 10 minutes
 			batflash = !batflash;
 			usleep(500000);
@@ -362,8 +394,8 @@ int main(int argc, char *argv[])
 			batflash = !batflash;
 			usleep(250000);
 			break;
-		default: // good or unknown
-			batflash = -1;
+		default: // not discharging
+			batflash = -2;
 			usleep(1000000);
 			break;
 		}
